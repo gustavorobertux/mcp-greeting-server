@@ -31,6 +31,111 @@ npm install
 npm start
 ```
 
+## 🔧 Claude Configuration
+
+### Method 1: Claude Desktop App
+
+1. **Install Claude Desktop** from [Claude.ai](https://claude.ai/download)
+
+2. **Locate the configuration file:**
+   ```bash
+   # Windows
+   %APPDATA%\Claude\claude_desktop_config.json
+   
+   # macOS
+   ~/Library/Application Support/Claude/claude_desktop_config.json
+   
+   # Linux
+   ~/.config/Claude/claude_desktop_config.json
+   ```
+
+3. **Add the MCP server configuration:**
+   ```json
+   {
+     "mcpServers": {
+       "greeting": {
+         "command": "node",
+         "args": ["/full/path/to/mcp-greeting-server/index.js"]
+       }
+     }
+   }
+   ```
+
+4. **Restart Claude Desktop** and you'll see the greeting tool available!
+
+### Method 2: Claude Web/API with MCP Client
+
+```javascript
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+
+// Connect to the greeting server
+const transport = new StdioClientTransport({
+  command: "node",
+  args: ["/path/to/mcp-greeting-server/index.js"]
+});
+
+const client = new Client({
+  name: "greeting-client",
+  version: "1.0.0"
+}, {
+  capabilities: {}
+});
+
+await client.connect(transport);
+
+// Use the greeting tool
+const result = await client.request({
+  method: "tools/call",
+  params: {
+    name: "greet",
+    arguments: {
+      name: "Alice",
+      language: "en"
+    }
+  }
+});
+
+console.log(result.content[0].text);
+```
+
+### Method 3: NPX (Quick Test)
+
+```bash
+# Run directly with npx (after publishing to npm)
+npx mcp-greeting-server
+
+# Or clone and run locally
+git clone https://github.com/gustavorobertux/mcp-greeting-server.git
+cd mcp-greeting-server
+npm install
+npm start
+```
+
+### Troubleshooting
+
+**Issue:** Claude Desktop doesn't show the greeting tool
+- ✅ Check file path is absolute
+- ✅ Verify Node.js is in PATH
+- ✅ Restart Claude Desktop completely
+- ✅ Check Claude Desktop logs for errors
+
+**Issue:** Permission denied
+```bash
+# Make the script executable (Linux/macOS)
+chmod +x index.js
+
+# Or run with node explicitly
+"command": "node"
+```
+
+**Issue:** Module not found
+```bash
+# Install dependencies in the project folder
+cd /path/to/mcp-greeting-server
+npm install
+```
+
 ### MCP Configuration
 
 Add to your MCP client configuration:
@@ -40,13 +145,43 @@ Add to your MCP client configuration:
   "mcpServers": {
     "greeting": {
       "command": "node",
-      "args": ["/path/to/mcp-greeting-server/index.js"]
+      "args": ["/absolute/path/to/mcp-greeting-server/index.js"]
     }
   }
 }
 ```
 
+### 🧪 Testing with Claude
+
+Once configured, you can test in Claude:
+
+```
+Hey Claude, can you greet me?
+```
+
+Claude will use the `greet` tool and respond with a time-appropriate greeting!
+
+```
+Hey Claude, greet me in Portuguese with my name "João"
+```
+
+Claude will call: `greet({ name: "João", language: "pt" })`
+
 ## 📖 Usage
+
+### With Claude
+
+Once configured with Claude, simply ask for greetings naturally:
+
+```
+User: "Hey Claude, can you greet me?"
+Claude: Uses greet() → "🌅 Good morning! friend! 🤝 It's 09:30 now. Hope you're having a great time!"
+
+User: "Greet me in Portuguese as João"  
+Claude: Uses greet({name: "João", language: "pt"}) → "☀️ Boa tarde! João! 🤝 São 14:30 agora. Espero que esteja tendo um ótimo momento!"
+```
+
+### Direct API Usage
 
 ### Basic Greeting
 
