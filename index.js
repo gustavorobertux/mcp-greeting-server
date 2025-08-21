@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-// Definir timezone do Brasil logo no início
+// Set Brazil timezone at startup
 process.env.TZ = 'America/Sao_Paulo';
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
@@ -40,15 +40,26 @@ class GreetingServer {
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [
         {
-          name: "saudar",
-          description: "Retorna uma saudação apropriada baseada no horário atual (bom dia, boa tarde ou boa noite)",
+          name: "greet",
+          description: "Returns an appropriate greeting based on the current time (good morning, good afternoon, or good evening)",
           inputSchema: {
             type: "object",
             properties: {
-              nome: {
+              name: {
                 type: "string",
-                description: "Nome da pessoa para personalizar a saudação (opcional)",
+                description: "Person's name to personalize the greeting (optional)",
               },
+              timezone: {
+                type: "string",
+                description: "Timezone for the greeting (defaults to America/Sao_Paulo)",
+                default: "America/Sao_Paulo"
+              },
+              language: {
+                type: "string",
+                description: "Language for the greeting (en, pt, es, fr)",
+                enum: ["en", "pt", "es", "fr"],
+                default: "en"
+              }
             },
           },
         },
@@ -57,64 +68,104 @@ class GreetingServer {
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       switch (request.params.name) {
-        case "saudar":
-          return await this.handleSaudar(request.params.arguments);
+        case "greet":
+          return await this.handleGreet(request.params.arguments);
         default:
           throw new McpError(
             ErrorCode.MethodNotFound,
-            `Ferramenta desconhecida: ${request.params.name}`
+            `Unknown tool: ${request.params.name}`
           );
       }
     });
   }
 
-  async handleSaudar(args) {
+  getLocalizedGreeting(hour, language = 'en') {
+    const greetings = {
+      en: {
+        morning: { text: 'Good morning!', emoji: '🌅' },
+        afternoon: { text: 'Good afternoon!', emoji: '☀️' },
+        evening: { text: 'Good evening!', emoji: '🌙' },
+        friend: 'friend',
+        timeText: 'It\'s',
+        hopeText: 'Hope you\'re having a great time!'
+      },
+      pt: {
+        morning: { text: 'Bom dia!', emoji: '🌅' },
+        afternoon: { text: 'Boa tarde!', emoji: '☀️' },
+        evening: { text: 'Boa noite!', emoji: '🌙' },
+        friend: 'amigo',
+        timeText: 'São',
+        hopeText: 'Espero que esteja tendo um ótimo momento!'
+      },
+      es: {
+        morning: { text: '¡Buenos días!', emoji: '🌅' },
+        afternoon: { text: '¡Buenas tardes!', emoji: '☀️' },
+        evening: { text: '¡Buenas noches!', emoji: '🌙' },
+        friend: 'amigo',
+        timeText: 'Son las',
+        hopeText: '¡Espero que estés teniendo un gran momento!'
+      },
+      fr: {
+        morning: { text: 'Bonjour!', emoji: '🌅' },
+        afternoon: { text: 'Bon après-midi!', emoji: '☀️' },
+        evening: { text: 'Bonsoir!', emoji: '🌙' },
+        friend: 'ami',
+        timeText: 'Il est',
+        hopeText: 'J\'espère que vous passez un bon moment!'
+      }
+    };
+
+    const lang = greetings[language] || greetings.en;
+    let greeting;
+
+    if (hour >= 5 && hour < 12) {
+      greeting = lang.morning;
+    } else if (hour >= 12 && hour < 18) {
+      greeting = lang.afternoon;
+    } else {
+      greeting = lang.evening;
+    }
+
+    return { ...greeting, ...lang };
+  }
+
+  async handleGreet(args) {
     try {
-      const nome = args?.nome || '';
+      const name = args?.name || '';
+      const timezone = args?.timezone || 'America/Sao_Paulo';
+      const language = args?.language || 'en';
       
-      // Obter horário atual do Brasil (UTC-3)
-      const agora = new Date();
+      // Get current time in specified timezone
+      const now = new Date();
       
-      // Usar Intl.DateTimeFormat para garantir timezone correto
-      const horaBrasil = new Intl.DateTimeFormat('pt-BR', {
-        timeZone: 'America/Sao_Paulo',
+      // Use Intl.DateTimeFormat to ensure correct timezone
+      const localTime = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
         hour: '2-digit',
         minute: '2-digit',
         hour12: false
-      }).format(agora);
+      }).format(now);
       
-      // Extrair apenas a hora para determinar saudação
-      const horaNum = parseInt(horaBrasil.split(':')[0]);
+      // Extract hour to determine greeting type
+      const hour = parseInt(localTime.split(':')[0]);
       
-      let saudacao;
-      let emoji;
+      const greetingData = this.getLocalizedGreeting(hour, language);
       
-      if (horaNum >= 5 && horaNum < 12) {
-        saudacao = 'Bom dia!';
-        emoji = '🌅';
-      } else if (horaNum >= 12 && horaNum < 18) {
-        saudacao = 'Boa tarde!';
-        emoji = '☀️';
-      } else {
-        saudacao = 'Boa noite!';
-        emoji = '🌙';
-      }
-      
-      const nomeTexto = nome ? ` ${nome}` : ' amigo';
-      const mensagem = `${emoji} ${saudacao}${nomeTexto}! 🤝\n\nSão ${horaBrasil} agora. Espero que esteja tendo um ótimo momento!`;
+      const nameText = name ? ` ${name}` : ` ${greetingData.friend}`;
+      const message = `${greetingData.emoji} ${greetingData.text}${nameText}! 🤝\n\n${greetingData.timeText} ${localTime} now. ${greetingData.hopeText}`;
       
       return {
         content: [
           {
             type: "text",
-            text: mensagem,
+            text: message,
           },
         ],
       };
     } catch (error) {
       throw new McpError(
         ErrorCode.InternalError,
-        `Erro ao gerar saudação: ${error.message}`
+        `Error generating greeting: ${error.message}`
       );
     }
   }
@@ -122,7 +173,7 @@ class GreetingServer {
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error("Servidor MCP Greeting iniciado com timezone Brasil 🇧🇷");
+    console.error("MCP Greeting Server started 🌍 - Author: Gustavo Roberto");
   }
 }
 
